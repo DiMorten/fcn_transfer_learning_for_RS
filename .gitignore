@@ -75,3 +75,4 @@ src/repeat_results.pickle
 *.tmp*
 *repeat_results.pickle
 *.directory
+*.h5
