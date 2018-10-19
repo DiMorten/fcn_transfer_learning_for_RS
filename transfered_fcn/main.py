@@ -29,6 +29,9 @@ import deb
 from keras_weighted_categorical_crossentropy import weighted_categorical_crossentropy, sparse_accuracy_ignoring_last_label
 from keras.models import load_model
 from keras.layers import ConvLSTM2D
+from keras.regularizers import l2
+from keras.layers.convolutional import Conv2D, Deconvolution2D, AtrousConvolution2D, UpSampling2D, Conv2DTranspose
+
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('-tl', '--t_len', dest='t_len',
 					type=int, default=7, help='t len')
@@ -839,6 +842,7 @@ class NetModel(NetObject):
 		print(self.graph.summary())
 
 	def build(self):
+		transfered_class_n=10
 		deb.prints(self.t_len)
 		in_im = Input(shape=(self.t_len,self.patch_len, self.patch_len, self.channel_n))
 
@@ -847,9 +851,24 @@ class NetModel(NetObject):
 		
 		x = Reshape((self.patch_len, self.patch_len,self.t_len*self.channel_n), name='predictions')(x)
 		out = DenseNetFCN((self.patch_len, self.patch_len, self.t_len*self.channel_n), nb_dense_block=2, growth_rate=16, dropout_rate=0.2,
-						nb_layers_per_block=2, upsampling_type='deconv', classes=self.class_n, 
+						nb_layers_per_block=2, upsampling_type='deconv', classes=transfered_class_n, 
 						activation='softmax', batchsize=32,input_tensor=x)
 		self.graph = Model(in_im, out)
+
+		transfer=True
+		if transfer==True:
+			self.graph.load_weights('weights_best_seq2.h5')
+
+			self.graph.layers.pop() #Eliminate last softmax layer
+			print(self.graph.summary())
+
+			# Create new softmax layer
+			weight_decay=1E-4
+			out = Conv2D(self.class_n, (1, 1), activation='softmax', padding='same', kernel_regularizer=l2(weight_decay),
+						  use_bias=False)(self.graph.layers[-1].output)
+			self.graph = Model(input = self.graph.input, output = out)
+			
+
 		print(self.graph.summary())
 	# def build(self): #Convlstm before
 	# 	deb.prints(self.t_len)
@@ -1014,7 +1033,6 @@ class NetModel(NetObject):
 		
 		self.early_stop["signal"]=False
 		#if self.train_mode==
-		self.graph.load_weights('weights_best.h5')
 		#data.im_reconstruct(subset='test',mode='label')
 		#for epoch in [0,1]:
 		#==============================START TRAIN/TEST LOOP============================#
@@ -1223,6 +1241,7 @@ if __name__ == '__main__':
 					 patience=args.patience,t_len=args.t_len,class_n=args.class_n,path=args.path,
 					 val_set=val_set)
 	model.class_n=data.class_n
+	deb.prints(model.class_n)
 	model.build()
 
 
